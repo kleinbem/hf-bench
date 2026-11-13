@@ -1,0 +1,32 @@
+{
+  "generatedAt": "2026-11-13T19:30:00+00:00",
+  "sourceRepo": "https://github.com/kleinbem/hf-bench",
+  "datasetRepo": "https://huggingface.co/datasets/kleinbem/edge-llm-benchmarks",
+  "models": [
+    {
+      "slug": "qwen3-4b",
+      "hf_source": "Qwen/Qwen3-4B",
+      "hf_target_repo": "kleinbem/Qwen3-4B-Edge-GGUF",
+      "display_name": "Qwen3-4B",
+      "params_b": 4.02,
+      "license_id": "apache-2.0",
+      "num_layers": 36,
+      "num_kv_heads": 8,
+      "head_dim": 128,
+      "max_context": 40960
+    },
+    {
+      "slug": "qwen2.5-coder-7b",
+      "hf_source": "Qwen/Qwen2.5-Coder-7B-Instruct",
+      "hf_target_repo": "kleinbem/Qwen2.5-Coder-7B-Instruct-Edge-GGUF",
+      "display_name": "Qwen2.5-Coder-7B-Instruct",
+      "params_b": 7.62,
+      "license_id": "apache-2.0",
+      "num_layers": 28,
+      "num_kv_heads": 4,
+      "head_dim": 128,
+      "max_context": 32768
+    }
+  ],
+  "records": []
+}

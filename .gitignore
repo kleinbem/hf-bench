@@ -1,0 +1,9 @@
+.direnv/
+.svelte-kit/
+build/
+node_modules/
+result
+result-*
+__pycache__/
+*.py[cod]
+.pytest_cache/
