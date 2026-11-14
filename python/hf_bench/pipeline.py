@@ -5,8 +5,10 @@ from datetime import UTC, datetime
 import json
 import os
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
+import sys
 import time
 
 from huggingface_hub import snapshot_download
@@ -490,7 +492,7 @@ def bench_orin_all(
     if not pending:
         return records
 
-    # Open the Orin build/bench window so mesh-llm.service yields the 8 GiB unified RAM.
+    # Open the Orin build/bench window inside try/finally so done is always touched on setup failure.
     prep_script = (
         "set -euo pipefail; "
         "touch /run/mesh-llm-build-window/start || true; "
@@ -501,21 +503,21 @@ def bench_orin_all(
         "mem_avail_kib=$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo); "
         'echo "REMOTE_INFO:$py:$mem_total_kib:$mem_avail_kib"'
     )
-    prep = _ssh_cmd(host, ["bash", "-c", prep_script])
-    if prep.returncode != 0:
-        raise RuntimeError(f"SSH setup on {host} failed: {prep.stderr.strip()}")
-
-    python_bin = "python3"
-    mem_total_gib = 7.6
-    mem_avail_gib = 6.6
-    for line in prep.stdout.splitlines():
-        if line.startswith("REMOTE_INFO:"):
-            parts = line.split(":")
-            python_bin = parts[1]
-            mem_total_gib = round(int(parts[2]) / (1024.0 * 1024.0), 2)
-            mem_avail_gib = round(int(parts[3]) / (1024.0 * 1024.0), 2)
-
     try:
+        prep = _ssh_cmd(host, ["bash", "-c", shlex.quote(prep_script)])
+        if prep.returncode != 0:
+            raise RuntimeError(f"SSH setup on {host} failed: {prep.stderr.strip()}")
+
+        python_bin = "python3"
+        mem_total_gib = 7.6
+        mem_avail_gib = 6.6
+        for line in prep.stdout.splitlines():
+            if line.startswith("REMOTE_INFO:"):
+                parts = line.split(":")
+                python_bin = parts[1]
+                mem_total_gib = round(int(parts[2]) / (1024.0 * 1024.0), 2)
+                mem_avail_gib = round(int(parts[3]) / (1024.0 * 1024.0), 2)
+
         # Reuse an existing CUDA sm_87 llama-bench in /nix/store before falling back to nix-build.
         locate_or_build = (
             "set -euo pipefail; "
@@ -525,7 +527,7 @@ def bench_orin_all(
             f"out=$(systemd-run --user --wait --pipe --collect nix-build --no-out-link -E '{ORIN_NIX_EXPR}'); "
             'echo "$out/bin/llama-bench"'
         )
-        build_res = _ssh_cmd(host, ["bash", "-c", locate_or_build])
+        build_res = _ssh_cmd(host, ["bash", "-c", shlex.quote(locate_or_build)])
         if build_res.returncode != 0:
             raise RuntimeError(f"Building/locating CUDA llama-bench on {host} failed: {build_res.stderr}")
         llama_bench_bin = build_res.stdout.strip().splitlines()[-1]
@@ -593,7 +595,16 @@ def bench_orin_all(
             store_gguf = add_proc.stdout.strip()
             try:
                 run_res = subprocess.run(
-                    ["ssh", "-o", "BatchMode=yes", host, python_bin, "-", llama_bench_bin, store_gguf],
+                    [
+                        "ssh",
+                        "-o",
+                        "BatchMode=yes",
+                        host,
+                        shlex.quote(python_bin),
+                        "-",
+                        shlex.quote(llama_bench_bin),
+                        shlex.quote(store_gguf),
+                    ],
                     input=ORIN_RUNNER_PY,
                     check=False,
                     capture_output=True,
@@ -686,10 +697,17 @@ def bench_orin_all(
                 out_json.write_text(json.dumps(asdict(rec), indent=2) + "\n", encoding="utf-8")
                 records.append(rec)
             finally:
-                _ssh_cmd(host, [f"exec nix-store --delete '{store_gguf}'"])
+                del_res = _ssh_cmd(host, [f"exec nix-store --delete {shlex.quote(store_gguf)}"])
+                if del_res.returncode != 0:
+                    err_msg = del_res.stderr.strip() or f"exit {del_res.returncode}"
+                    print(
+                        f"Warning: failed to delete staged GGUF {store_gguf} on {host}: {err_msg}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
     finally:
         print(f"Releasing Orin build window on {host}...")
-        _ssh_cmd(host, ["bash", "-c", "touch /run/mesh-llm-build-window/done || true"])
+        _ssh_cmd(host, ["bash", "-c", shlex.quote("touch /run/mesh-llm-build-window/done || true")])
 
     return records
 
