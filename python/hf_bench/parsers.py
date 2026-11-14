@@ -5,13 +5,14 @@ import json
 import re
 from typing import Any
 
-PPL_RE = re.compile(r"Final estimate:\s*PPL\s*=\s*([0-9.]+)\s*\+/-\s*([0-9.]+)")
-MEAN_KLD_RE = re.compile(r"Mean\s+KLD:\s*([-0-9.]+)\s*±\s*([0-9.]+)")
+PPL_RE = re.compile(r"Final estimate:\s*PPL\s*=\s*([0-9.]+)\s*(?:\+/-|±)\s*([0-9.]+)")
+MEAN_PPL_Q_RE = re.compile(r"Mean\s+PPL\(Q\)\s*:\s*([0-9.]+)\s*(?:\+/-|±)\s*([0-9.]+)")
+MEAN_KLD_RE = re.compile(r"Mean\s+KLD:\s*([-0-9.]+)\s*(?:\+/-|±)\s*([0-9.]+)")
 MAX_KLD_RE = re.compile(r"Maximum\s+KLD:\s*([-0-9.]+)")
 P99_KLD_RE = re.compile(r"99\.0%\s+KLD:\s*([-0-9.]+)")
 MEDIAN_KLD_RE = re.compile(r"Median\s+KLD:\s*([-0-9.]+)")
-RMS_DP_RE = re.compile(r"RMS\s+Δp\s*:\s*([0-9.]+)\s*±\s*([0-9.]+)\s*%")
-SAME_TOP_RE = re.compile(r"Same top p:\s*([0-9.]+)\s*±\s*([0-9.]+)\s*%")
+RMS_DP_RE = re.compile(r"RMS\s+Δp\s*:\s*([-0-9.]+)\s*(?:\+/-|±)\s*([0-9.]+)\s*%")
+SAME_TOP_RE = re.compile(r"Same top p:\s*([0-9.]+)\s*(?:\+/-|±)\s*([0-9.]+)\s*%")
 
 
 @dataclass(frozen=True)
@@ -44,9 +45,9 @@ def _match_float(pattern: re.Pattern[str], text: str, group: int = 1) -> float |
 
 
 def parse_perplexity_output(log_text: str) -> PerplexityMetrics:
-    ppl_match = PPL_RE.search(log_text)
+    ppl_match = PPL_RE.search(log_text) or MEAN_PPL_Q_RE.search(log_text)
     if not ppl_match:
-        raise ValueError("Could not find 'Final estimate: PPL = ...' in llama-perplexity output")
+        raise ValueError("Could not find 'Final estimate: PPL =' or 'Mean PPL(Q) :' in llama-perplexity output")
     return PerplexityMetrics(
         ppl=float(ppl_match.group(1)),
         ppl_std=float(ppl_match.group(2)),
