@@ -12,7 +12,10 @@ from hf_bench.parsers import parse_llama_bench_json, parse_perplexity_output
 from hf_bench.pipeline import ORIN_RUNNER_PY
 
 SAMPLE_PPL_LOG = """
-Final estimate: PPL = 6.8421 +/- 0.04123
+====== Perplexity statistics ======
+Mean PPL(Q)                   :  14.502134 ±   1.562100
+Mean PPL(base)                :  14.498300 ±   1.561500
+Cor(ln(PPL(Q)), ln(PPL(base))):  99.98%
 
 ====== KL divergence statistics ======
 Mean    KLD:   0.018420 ±   0.000512
@@ -23,8 +26,9 @@ Median  KLD:   0.006310
 Minimum KLD:  -0.000012
 
 ====== Token probability statistics ======
-RMS Δp    :  3.412 ± 0.045 %
-Same top p: 95.840 ± 0.182 %
+Mean    Δp:  -0.002 ± 0.014 %
+RMS Δp    :   3.412 ± 0.045 %
+Same top p:  95.840 ± 0.182 %
 """
 
 SAMPLE_BENCH_JSON = """
@@ -65,11 +69,14 @@ class HfBenchTests(unittest.TestCase):
 
     def test_parse_perplexity_and_kld(self) -> None:
         m = parse_perplexity_output(SAMPLE_PPL_LOG)
-        self.assertAlmostEqual(m.ppl, 6.8421)
+        self.assertAlmostEqual(m.ppl, 14.502134)
         self.assertAlmostEqual(m.mean_kld or 0.0, 0.01842)
         self.assertAlmostEqual(m.p99_kld or 0.0, 0.1942)
         self.assertAlmostEqual(m.rms_delta_p_pct or 0.0, 3.412)
         self.assertAlmostEqual(m.same_top1_pct or 0.0, 95.84)
+        base = parse_perplexity_output("Final estimate: PPL = 14.4983 +/- 1.56150\n")
+        self.assertAlmostEqual(base.ppl, 14.4983)
+        self.assertIsNone(base.mean_kld)
 
     def test_parse_llama_bench_json(self) -> None:
         tp = parse_llama_bench_json("noise before\n" + SAMPLE_BENCH_JSON)
