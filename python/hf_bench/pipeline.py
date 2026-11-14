@@ -467,9 +467,9 @@ def _ssh_opts_and_env() -> tuple[list[str], dict[str, str]]:
     opts = ["-o", "BatchMode=yes"]
     notouch_key = Path.home() / ".ssh" / "id_ed25519_sk_rk_GitHubNoTouchV2"
     if notouch_key.exists():
-        opts.extend(["-i", str(notouch_key)])
+        opts.extend(["-o", "IdentitiesOnly=yes", "-i", str(notouch_key)])
         existing = env.get("NIX_SSHOPTS", "").strip()
-        key_flag = f"-i {shlex.quote(str(notouch_key))}"
+        key_flag = f"-o IdentitiesOnly=yes -i {shlex.quote(str(notouch_key))}"
         env["NIX_SSHOPTS"] = f"{existing} {key_flag}".strip() if existing else key_flag
     return opts, env
 
