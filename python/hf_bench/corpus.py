@@ -149,7 +149,7 @@ def write_corpora(out_dir: Path) -> tuple[Path, Path]:
     # Repeat varied permutations with distinct framing so llama-imatrix gets >= 16 chunks of 512 tokens.
     calib_blocks: list[str] = []
     for round_idx in range(8):
-        for sec_idx, sec in enumerate(SECTIONS):
+        for sec_idx in range(len(SECTIONS)):
             shifted = SECTIONS[(sec_idx + round_idx) % len(SECTIONS)]
             calib_blocks.append(f"--- Session {round_idx + 1}.{sec_idx + 1} ---\n{shifted.strip()}\n")
     calib_path.write_text("\n\n".join(calib_blocks) + "\n", encoding="utf-8")

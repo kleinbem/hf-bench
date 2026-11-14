@@ -5,8 +5,10 @@ from datetime import UTC, datetime
 import json
 import os
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
+import sys
 import time
 
 from huggingface_hub import snapshot_download
@@ -390,24 +392,35 @@ model_path = sys.argv[2]
 
 def read_orin_mw():
     # Tegra Orin Nano INA3221 hwmon exposes VDD_IN power or voltage*current.
-    for p in glob.glob("/sys/bus/i2c/drivers/ina3221/*/*/hwmon/hwmon*/power1_input"):
+    for hw in sorted(glob.glob("/sys/class/hwmon/hwmon*")):
         try:
-            return float(open(p).read().strip()) / 1000.0
+            with open(os.path.join(hw, "name"), encoding="utf-8") as f:
+                if f.read().strip() != "ina3221":
+                    continue
         except OSError:
-            pass
-    for hw in glob.glob("/sys/bus/i2c/drivers/ina3221/*/*/hwmon/hwmon*"):
+            continue
+        p_path = os.path.join(hw, "power1_input")
+        if os.path.exists(p_path):
+            try:
+                with open(p_path, encoding="utf-8") as f:
+                    return float(f.read().strip()) / 1000.0
+            except (OSError, ValueError):
+                pass
         try:
-            mv = float(open(os.path.join(hw, "in1_input")).read().strip())
-            ma = float(open(os.path.join(hw, "curr1_input")).read().strip())
+            with open(os.path.join(hw, "in1_input"), encoding="utf-8") as fv:
+                mv = float(fv.read().strip())
+            with open(os.path.join(hw, "curr1_input"), encoding="utf-8") as fc:
+                ma = float(fc.read().strip())
             return (mv * ma) / 1000.0
-        except OSError:
+        except (OSError, ValueError):
             continue
     return None
 
 def mem_avail_mib():
-    for line in open("/proc/meminfo"):
-        if line.startswith("MemAvailable:"):
-            return int(line.split()[1]) / 1024.0
+    with open("/proc/meminfo", encoding="utf-8") as f:
+        for line in f:
+            if line.startswith("MemAvailable:"):
+                return int(line.split()[1]) / 1024.0
     return 0.0
 
 samples = []
@@ -479,56 +492,46 @@ def bench_orin_all(
     if not pending:
         return records
 
-    # Open the Orin build/bench window so mesh-llm.service yields the 8 GiB unified RAM.
+    # Open the Orin build/bench window inside try/finally so done is always touched on setup failure.
     prep_script = (
         "set -euo pipefail; "
         "touch /run/mesh-llm-build-window/start || true; "
         "for _ in $(seq 45); do systemctl is-active --quiet mesh-llm.service || break; sleep 2; done; "
-        "mkdir -p /persist/cache/hf-bench ~/.cache/hf-bench; "
-        "if [ -w /persist/cache/hf-bench ]; then dir=/persist/cache/hf-bench; else dir=$HOME/.cache/hf-bench; fi; "
+        "py=$(command -v python3 || ls -1 /nix/store/*-python3-3.*/bin/python3 2>/dev/null | head -n1); "
+        "if [ -z \"$py\" ]; then echo 'python3 not found on Orin' >&2; exit 1; fi; "
         "mem_total_kib=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo); "
         "mem_avail_kib=$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo); "
-        "echo \"REMOTE_INFO:$dir:$mem_total_kib:$mem_avail_kib\""
+        'echo "REMOTE_INFO:$py:$mem_total_kib:$mem_avail_kib"'
     )
-    prep = _ssh_cmd(host, ["bash", "-c", prep_script])
-    if prep.returncode != 0:
-        raise RuntimeError(f"SSH setup on {host} failed: {prep.stderr.strip()}")
-
-    remote_dir = "/persist/cache/hf-bench"
-    mem_total_gib = 7.6
-    mem_avail_gib = 6.6
-    for line in prep.stdout.splitlines():
-        if line.startswith("REMOTE_INFO:"):
-            parts = line.split(":")
-            remote_dir = parts[1]
-            mem_total_gib = round(int(parts[2]) / (1024.0 * 1024.0), 2)
-            mem_avail_gib = round(int(parts[3]) / (1024.0 * 1024.0), 2)
-
     try:
-        # Locate or build CUDA 12.6 sm_87 llama-cpp on Orin under systemd-run so it survives transient drops.
-        build_res = _ssh_cmd(
-            host,
-            [
-                "bash",
-                "-c",
-                "set -euo pipefail; "
-                "if command -v llama-bench >/dev/null 2>&1; then command -v llama-bench; exit 0; fi; "
-                f"out=$(systemd-run --user --wait --pipe --collect nix-build --no-out-link -E '{ORIN_NIX_EXPR}'); "
-                'echo "$out/bin/llama-bench"',
-            ],
+        prep = _ssh_cmd(host, ["bash", "-c", shlex.quote(prep_script)])
+        if prep.returncode != 0:
+            raise RuntimeError(f"SSH setup on {host} failed: {prep.stderr.strip()}")
+
+        python_bin = "python3"
+        mem_total_gib = 7.6
+        mem_avail_gib = 6.6
+        for line in prep.stdout.splitlines():
+            if line.startswith("REMOTE_INFO:"):
+                parts = line.split(":")
+                python_bin = parts[1]
+                mem_total_gib = round(int(parts[2]) / (1024.0 * 1024.0), 2)
+                mem_avail_gib = round(int(parts[3]) / (1024.0 * 1024.0), 2)
+
+        # Reuse an existing CUDA sm_87 llama-bench in /nix/store before falling back to nix-build.
+        locate_or_build = (
+            "set -euo pipefail; "
+            "for b in $(command -v llama-bench 2>/dev/null || true) /nix/store/*-llama-cpp-*/bin/llama-bench; do "
+            '  if [ -x "$b" ] && "$b" --list-devices 2>&1 | grep -q CUDA0; then echo "$b"; exit 0; fi; '
+            "done; "
+            f"out=$(systemd-run --user --wait --pipe --collect nix-build --no-out-link -E '{ORIN_NIX_EXPR}'); "
+            'echo "$out/bin/llama-bench"'
         )
+        build_res = _ssh_cmd(host, ["bash", "-c", shlex.quote(locate_or_build)])
         if build_res.returncode != 0:
             raise RuntimeError(f"Building/locating CUDA llama-bench on {host} failed: {build_res.stderr}")
         llama_bench_bin = build_res.stdout.strip().splitlines()[-1]
         print(f"Using Orin CUDA llama-bench: {llama_bench_bin}")
-
-        runner_remote = f"{remote_dir}/orin_runner.py"
-        subprocess.run(
-            ["ssh", "-o", "BatchMode=yes", host, f"cat > {runner_remote}"],
-            input=ORIN_RUNNER_PY,
-            text=True,
-            check=True,
-        )
 
         for qspec, qpath in pending:
             out_json = work / "bench" / f"orin-nano-{qspec.name}.json"
@@ -537,7 +540,7 @@ def bench_orin_all(
             bpw = round((weight_bytes * 8.0) / (spec.params_b * 1e9), 2)
             qual, base_ppl = _load_quality(work, qspec.name)
 
-            # Tegra CUDA context + KV/compute buffers require ~0.55 GiB above weight tensors.
+            # Tegra CUDA context + KV/compute buffers require ~0.45 GiB above weight tensors.
             if weight_gib + 0.45 > mem_avail_gib:
                 rec = BenchmarkRecord(
                     record_id=f"{spec.slug}__orin-nano__{qspec.name}",
@@ -581,14 +584,32 @@ def bench_orin_all(
                 records.append(rec)
                 continue
 
-            remote_gguf = f"{remote_dir}/{qpath.name}"
+            # Stream GGUF directly into Orin's NVMe-backed /nix/store (Orin / and /tmp are 4 GiB tmpfs).
+            print(f"Staging {qpath.name} ({weight_gib} GiB) to ssh-ng://{host} /nix/store...")
+            add_proc = subprocess.run(
+                ["nix", "--store", f"ssh-ng://{host}", "store", "add-file", str(qpath)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            store_gguf = add_proc.stdout.strip()
             try:
-                print(f"Copying {qpath.name} ({weight_gib} GiB) to {host}:{remote_gguf}...")
-                subprocess.run(
-                    ["scp", "-q", "-o", "BatchMode=yes", str(qpath), f"{host}:{remote_gguf}"],
-                    check=True,
+                run_res = subprocess.run(
+                    [
+                        "ssh",
+                        "-o",
+                        "BatchMode=yes",
+                        host,
+                        shlex.quote(python_bin),
+                        "-",
+                        shlex.quote(llama_bench_bin),
+                        shlex.quote(store_gguf),
+                    ],
+                    input=ORIN_RUNNER_PY,
+                    check=False,
+                    capture_output=True,
+                    text=True,
                 )
-                run_res = _ssh_cmd(host, ["python3", runner_remote, llama_bench_bin, remote_gguf])
                 payload = None
                 for line in run_res.stdout.splitlines():
                     if line.startswith("HF_BENCH_RESULT_JSON:"):
@@ -676,10 +697,17 @@ def bench_orin_all(
                 out_json.write_text(json.dumps(asdict(rec), indent=2) + "\n", encoding="utf-8")
                 records.append(rec)
             finally:
-                _ssh_cmd(host, ["rm", "-f", remote_gguf])
+                del_res = _ssh_cmd(host, [f"exec nix-store --delete {shlex.quote(store_gguf)}"])
+                if del_res.returncode != 0:
+                    err_msg = del_res.stderr.strip() or f"exit {del_res.returncode}"
+                    print(
+                        f"Warning: failed to delete staged GGUF {store_gguf} on {host}: {err_msg}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
     finally:
         print(f"Releasing Orin build window on {host}...")
-        _ssh_cmd(host, ["bash", "-c", "touch /run/mesh-llm-build-window/done || true"])
+        _ssh_cmd(host, ["bash", "-c", shlex.quote("touch /run/mesh-llm-build-window/done || true")])
 
     return records
 

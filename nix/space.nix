@@ -47,7 +47,7 @@ buildNpmPackage (finalAttrs: {
     ];
   };
 
-  npmDepsHash = "sha256-ty9Rg/LTFZsmGVyL2ykS5dHE/J+S2sXsCAAwG5oyyJM=";
+  npmDepsHash = "sha256-36UwrFH5aVh5obqjdcFrDebBy1qaznjyfGS7VNUNhOM=";
   # no-link: standard buildNpmPackage option when unpacking git lockfile entries (@kleinbem/web-config).
   makeCacheWritable = true;
 
