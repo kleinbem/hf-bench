@@ -9,7 +9,7 @@ from hf_bench.corpus import write_corpora
 from hf_bench.export import export_all, render_model_card
 from hf_bench.models import MODELS
 from hf_bench.parsers import parse_llama_bench_json, parse_perplexity_output
-
+from hf_bench.pipeline import ORIN_RUNNER_PY
 
 SAMPLE_PPL_LOG = """
 Final estimate: PPL = 6.8421 +/- 0.04123
@@ -129,6 +129,11 @@ class HfBenchTests(unittest.TestCase):
             card = render_model_card(MODELS["qwen3-4b"], [rec])
             self.assertIn("28.4 tok/s", card)
             self.assertIn("0.394 J/tok", card)
+
+    def test_orin_runner_script_compiles(self) -> None:
+        code = compile(ORIN_RUNNER_PY, "<orin_runner>", "exec")
+        self.assertIsNotNone(code)
+        self.assertIn("ina3221", ORIN_RUNNER_PY)
 
 
 if __name__ == "__main__":
