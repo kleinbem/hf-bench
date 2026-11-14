@@ -462,9 +462,23 @@ print("HF_BENCH_RESULT_JSON:" + json.dumps({
 """.strip()
 
 
+def _ssh_opts_and_env() -> tuple[list[str], dict[str, str]]:
+    env = {**os.environ, "SSH_ASKPASS": "/bin/false", "SSH_ASKPASS_REQUIRE": "force"}
+    opts = ["-o", "BatchMode=yes"]
+    notouch_key = Path.home() / ".ssh" / "id_ed25519_sk_rk_GitHubNoTouchV2"
+    if notouch_key.exists():
+        opts.extend(["-i", str(notouch_key)])
+        existing = env.get("NIX_SSHOPTS", "").strip()
+        key_flag = f"-i {shlex.quote(str(notouch_key))}"
+        env["NIX_SSHOPTS"] = f"{existing} {key_flag}".strip() if existing else key_flag
+    return opts, env
+
+
 def _ssh_cmd(host: str, remote_args: list[str]) -> subprocess.CompletedProcess[str]:
+    opts, env = _ssh_opts_and_env()
     return subprocess.run(
-        ["ssh", "-o", "BatchMode=yes", host, *remote_args],
+        ["ssh", *opts, host, *remote_args],
+        env=env,
         check=False,
         capture_output=True,
         text=True,
@@ -586,8 +600,10 @@ def bench_orin_all(
 
             # Stream GGUF directly into Orin's NVMe-backed /nix/store (Orin / and /tmp are 4 GiB tmpfs).
             print(f"Staging {qpath.name} ({weight_gib} GiB) to ssh-ng://{host} /nix/store...")
+            ssh_opts, ssh_env = _ssh_opts_and_env()
             add_proc = subprocess.run(
                 ["nix", "--store", f"ssh-ng://{host}", "store", "add-file", str(qpath)],
+                env=ssh_env,
                 check=True,
                 capture_output=True,
                 text=True,
@@ -597,14 +613,14 @@ def bench_orin_all(
                 run_res = subprocess.run(
                     [
                         "ssh",
-                        "-o",
-                        "BatchMode=yes",
+                        *ssh_opts,
                         host,
                         shlex.quote(python_bin),
                         "-",
                         shlex.quote(llama_bench_bin),
                         shlex.quote(store_gguf),
                     ],
+                    env=ssh_env,
                     input=ORIN_RUNNER_PY,
                     check=False,
                     capture_output=True,
