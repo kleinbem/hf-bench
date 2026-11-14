@@ -515,7 +515,6 @@ def bench_orin_all(
             mem_total_gib = round(int(parts[2]) / (1024.0 * 1024.0), 2)
             mem_avail_gib = round(int(parts[3]) / (1024.0 * 1024.0), 2)
 
-    runner_remote = "/tmp/hf_bench_orin_runner.py"
     try:
         # Reuse an existing CUDA sm_87 llama-bench in /nix/store before falling back to nix-build.
         locate_or_build = (
@@ -531,13 +530,6 @@ def bench_orin_all(
             raise RuntimeError(f"Building/locating CUDA llama-bench on {host} failed: {build_res.stderr}")
         llama_bench_bin = build_res.stdout.strip().splitlines()[-1]
         print(f"Using Orin CUDA llama-bench: {llama_bench_bin}")
-
-        subprocess.run(
-            ["ssh", "-o", "BatchMode=yes", host, f"cat > {runner_remote}"],
-            input=ORIN_RUNNER_PY,
-            text=True,
-            check=True,
-        )
 
         for qspec, qpath in pending:
             out_json = work / "bench" / f"orin-nano-{qspec.name}.json"
@@ -600,7 +592,13 @@ def bench_orin_all(
             )
             store_gguf = add_proc.stdout.strip()
             try:
-                run_res = _ssh_cmd(host, [python_bin, runner_remote, llama_bench_bin, store_gguf])
+                run_res = subprocess.run(
+                    ["ssh", "-o", "BatchMode=yes", host, python_bin, "-", llama_bench_bin, store_gguf],
+                    input=ORIN_RUNNER_PY,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
                 payload = None
                 for line in run_res.stdout.splitlines():
                     if line.startswith("HF_BENCH_RESULT_JSON:"):
@@ -691,7 +689,7 @@ def bench_orin_all(
                 _ssh_cmd(host, [f"exec nix-store --delete '{store_gguf}'"])
     finally:
         print(f"Releasing Orin build window on {host}...")
-        _ssh_cmd(host, ["bash", "-c", f"rm -f {runner_remote}; touch /run/mesh-llm-build-window/done || true"])
+        _ssh_cmd(host, ["bash", "-c", "touch /run/mesh-llm-build-window/done || true"])
 
     return records
 
