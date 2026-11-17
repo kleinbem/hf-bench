@@ -190,7 +190,7 @@
 			<p class="max-w-3xl text-sm opacity-80">
 				Exact FP16 logit Kullback-Leibler divergence (<code>--kl-divergence</code>), decode throughput,
 				unified-memory OOM boundaries, and hardware power efficiency across 8 GiB NVIDIA Jetson Orin
-				Nano (<code>sm_87</code> CUDA 12.6) and x86_64 Raptor Lake.
+				Nano (<code>sm_87</code> CUDA) and x86_64 Raptor Lake.
 			</p>
 		</div>
 		<div class="flex items-center gap-3">

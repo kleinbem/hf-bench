@@ -15,7 +15,7 @@ dev:
 run-local model="qwen3-4b":
     nix run .#hf-bench -- run-local --model "{{model}}"
 
-# Benchmark quantized GGUFs on Jetson Orin Nano (CUDA 12.6 sm_87 + INA3221 power)
+# Benchmark quantized GGUFs on Jetson Orin Nano (CUDA 13 sm_87 + INA3221 power)
 bench-orin model="qwen3-4b" host="orin-nano":
     nix run .#hf-bench -- bench-orin --model "{{model}}" --host "{{host}}"
 

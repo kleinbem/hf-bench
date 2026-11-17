@@ -18,5 +18,5 @@ Edge and local LLM `imatrix` quantization, FP16 logit KL-divergence evaluation, 
 
 - **Storage**: Never place GGUF weights, logits, or safetensors in `/tmp` (8 GiB tmpfs). All artifacts live under `~/.cache/hf-bench` locally and `/persist/cache/hf-bench` on `orin-nano`.
 - **Priority on `nixos-nvme`**: Local `llama-imatrix`, `llama-quantize`, `llama-perplexity`, and `llama-bench` run under `chrt --idle 0 ionice -c3` with `-t 6`.
-- **`orin-nano` GPU window**: Touch `/run/mesh-llm-build-window/start` before benchmarking so `mesh-llm.service` yields unified memory, and always touch `/run/mesh-llm-build-window/done` on exit. Build `llama-cpp` on Orin with `cudaPackages_12_6` and `cudaCapabilities = [ "8.7" ]`.
+- **`orin-nano` GPU window**: Touch `/run/mesh-llm-build-window/start` before benchmarking so `mesh-llm.service` yields unified memory, and always touch `/run/mesh-llm-build-window/done` on exit. Build `llama-cpp` on Orin with nixpkgs' default CUDA (13, matching JetPack 7) and `cudaCapabilities = [ "8.7" ]`.
 - **Browser support**: Modern evergreen browsers; follow `@kleinbem/web-config` strict Svelte 5 runes mode.

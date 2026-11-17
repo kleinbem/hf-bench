@@ -94,7 +94,7 @@ tags:
 
 # {spec.display_name} — Edge-Calibrated `imatrix` GGUF Suite
 
-Importance-matrix (`llama-imatrix`) GGUF quantizations of [`{spec.hf_source}`](https://huggingface.co/{spec.hf_source}), calibrated specifically for **agentic tool-calling, code review, and declarative infrastructure reasoning** and benchmarked across **8 GiB NVIDIA Jetson Orin Nano (CUDA 12.6 `sm_87`)** and **x86_64 AVX2**.
+Importance-matrix (`llama-imatrix`) GGUF quantizations of [`{spec.hf_source}`](https://huggingface.co/{spec.hf_source}), calibrated specifically for **agentic tool-calling, code review, and declarative infrastructure reasoning** and benchmarked across **8 GiB NVIDIA Jetson Orin Nano (CUDA 13 `sm_87`)** and **x86_64 AVX2**.
 
 - **Interactive Pareto & 8 GiB Edge KV-Cache Explorer**: [`spaces/kleinbem/edge-llm-pareto`](https://huggingface.co/spaces/kleinbem/edge-llm-pareto)
 - **Full Parquet Telemetry Dataset**: [`datasets/kleinbem/edge-llm-benchmarks`](https://huggingface.co/datasets/kleinbem/edge-llm-benchmarks)
@@ -160,7 +160,7 @@ base_models:
 
 ## Hardware Targets
 
-1. **`orin-nano`**: NVIDIA Jetson Orin Nano (8 GiB unified LPDDR5, Ampere 1024-core Tegra GPU `sm_87`, NixOS + JetPack 6 CUDA 12.6, INA3221 hardware power rail sampling).
+1. **`orin-nano`**: NVIDIA Jetson Orin Nano (8 GiB unified LPDDR5, Ampere 1024-core Tegra GPU `sm_87`, NixOS + JetPack 7 CUDA 13, INA3221 hardware power rail sampling).
 2. **`nixos-nvme`**: 13th Gen Intel Core i3-1315U (`x86_64` Raptor Lake AVX2, 62 GiB DDR5, NixOS idle scheduler priority, Intel RAPL package energy sampling).
 
 ## Schema Highlights

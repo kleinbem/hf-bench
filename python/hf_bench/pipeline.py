@@ -369,6 +369,7 @@ def bench_local_all(
     return records
 
 
+# nixpkgs' default CUDA, which must match the Orin's JetPack driver (JetPack 7: CUDA 13).
 ORIN_NIX_EXPR = """
 let
   pkgs = import <nixpkgs> {
@@ -379,9 +380,7 @@ let
     };
   };
 in
-pkgs.llama-cpp.override {
-  cudaPackages = pkgs.cudaPackages_12_6;
-}
+pkgs.llama-cpp
 """.strip()
 
 ORIN_RUNNER_PY = """
@@ -545,7 +544,22 @@ def bench_orin_all(
         if build_res.returncode != 0:
             raise RuntimeError(f"Building/locating CUDA llama-bench on {host} failed: {build_res.stderr}")
         llama_bench_bin = build_res.stdout.strip().splitlines()[-1]
-        print(f"Using Orin CUDA llama-bench: {llama_bench_bin}")
+        # A reused llama-bench may predate the host's CUDA: label records with the one it links.
+        cuda_res = _ssh_cmd(
+            host,
+            [
+                "bash",
+                "-c",
+                shlex.quote(
+                    f"nix-store -qR $(realpath {shlex.quote(llama_bench_bin)}) "
+                    "| grep -oE 'cuda_cudart-[0-9]+[.][0-9]+' | head -n 1 | cut -d- -f2"
+                ),
+            ],
+        )
+        cuda_version = cuda_res.stdout.strip() or "unknown"
+        orin_label = f"NVIDIA Jetson Orin Nano (Ampere sm_87 CUDA {cuda_version}, 8 GiB Unified)"
+        orin_backend = f"CUDA {cuda_version} (Tegra sm_87)"
+        print(f"Using Orin CUDA {cuda_version} llama-bench: {llama_bench_bin}")
 
         for qspec, qpath in pending:
             out_json = work / "bench" / f"orin-nano-{qspec.name}.json"
@@ -570,8 +584,8 @@ def bench_orin_all(
                     weight_bytes=weight_bytes,
                     weight_gib=weight_gib,
                     hardware_id="orin-nano",
-                    hardware_label="NVIDIA Jetson Orin Nano (Ampere sm_87 CUDA 12.6, 8 GiB Unified)",
-                    backend="CUDA 12.6 (Tegra sm_87)",
+                    hardware_label=orin_label,
+                    backend=orin_backend,
                     memory_budget_gib=mem_total_gib,
                     status="oom",
                     oom_reason=(
@@ -648,8 +662,8 @@ def bench_orin_all(
                         weight_bytes=weight_bytes,
                         weight_gib=weight_gib,
                         hardware_id="orin-nano",
-                        hardware_label="NVIDIA Jetson Orin Nano (Ampere sm_87 CUDA 12.6, 8 GiB Unified)",
-                        backend="CUDA 12.6 (Tegra sm_87)",
+                        hardware_label=orin_label,
+                        backend=orin_backend,
                         memory_budget_gib=mem_total_gib,
                         status="oom",
                         oom_reason=f"CUDA allocation failed on 8 GiB unified RAM ({payload['stderr'][-160:].strip()})",
@@ -689,8 +703,8 @@ def bench_orin_all(
                         weight_bytes=weight_bytes,
                         weight_gib=weight_gib,
                         hardware_id="orin-nano",
-                        hardware_label="NVIDIA Jetson Orin Nano (Ampere sm_87 CUDA 12.6, 8 GiB Unified)",
-                        backend="CUDA 12.6 (Tegra sm_87)",
+                        hardware_label=orin_label,
+                        backend=orin_backend,
                         memory_budget_gib=mem_total_gib,
                         status="ok",
                         oom_reason=None,
