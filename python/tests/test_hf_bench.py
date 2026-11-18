@@ -6,7 +6,7 @@ import tempfile
 import unittest
 
 from hf_bench.corpus import write_corpora
-from hf_bench.export import export_all, render_model_card
+from hf_bench.export import export_all, orin_cuda, render_dataset_card, render_model_card
 from hf_bench.models import MODELS
 from hf_bench.parsers import parse_llama_bench_json, parse_perplexity_output
 from hf_bench.pipeline import ORIN_RUNNER_PY
@@ -136,6 +136,12 @@ class HfBenchTests(unittest.TestCase):
             card = render_model_card(MODELS["qwen3-4b"], [rec])
             self.assertIn("28.4 tok/s", card)
             self.assertIn("0.394 J/tok", card)
+            self.assertIn("(CUDA 12.6 `sm_87`)", card)
+            newer = {**rec, "quant": "Q8_0", "backend": "CUDA 13.5 (Tegra sm_87)"}
+            self.assertIn("JetPack, CUDA 12.6 / 13.5,", render_dataset_card([rec, newer]))
+
+    def test_orin_cuda_without_versions(self) -> None:
+        self.assertEqual(orin_cuda([{"hardware_id": "nixos-nvme", "backend": "CPU (AVX2)"}]), "CUDA")
 
     def test_orin_runner_script_compiles(self) -> None:
         code = compile(ORIN_RUNNER_PY, "<orin_runner>", "exec")

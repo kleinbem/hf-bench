@@ -5,7 +5,7 @@ Reproducible `llama.cpp` importance-matrix (`imatrix`) quantization, exact FP16 
 ## What It Produces
 
 1. **Calibrated Edge GGUF Suites (`kleinbem/*-Edge-GGUF`)**: Quantized from BF16/FP16 safetensors (`Q8_0`, `Q6_K`, `Q5_K_M`, `Q4_K_M`, `IQ4_XS`, `IQ3_M`) using a deterministic agentic tool-calling + systems code calibration corpus, including an uncalibrated `Q4_K_M` control to quantify `imatrix` KL-divergence reduction.
-2. **Hardware & Quality Telemetry Dataset (`kleinbem/edge-llm-benchmarks`)**: Parquet + JSON records combining FP16 logit KL-divergence (`mean_kld`, `max_kld`, `ppl`, `top1_agreement`) with hardware decode/prefill throughput, unified memory footprint, and power efficiency (`Watts`, `Joules/token`) across NVIDIA Jetson Orin Nano (`sm_87` CUDA 13, 8 GiB unified RAM) and Intel Raptor Lake (`x86_64` AVX2).
+2. **Hardware & Quality Telemetry Dataset (`kleinbem/edge-llm-benchmarks`)**: Parquet + JSON records combining FP16 logit KL-divergence (`mean_kld`, `max_kld`, `ppl`, `top1_agreement`) with hardware decode/prefill throughput, unified memory footprint, and power efficiency (`Watts`, `Joules/token`) across NVIDIA Jetson Orin Nano (`sm_87` CUDA 12.6 or 13, 8 GiB unified RAM) and Intel Raptor Lake (`x86_64` AVX2).
 3. **Interactive Static Space (`spaces/kleinbem/edge-llm-pareto`)**: Svelte 5 + Tailwind CSS 4 explorer built via Nix (`buildNpmPackage`), featuring a real-time Pareto frontier plot and an 8 GiB Edge GQA KV-cache calculator.
 
 ## Quickstart

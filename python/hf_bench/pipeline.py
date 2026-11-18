@@ -532,10 +532,11 @@ def bench_orin_all(
                 mem_avail_gib = round(int(parts[3]) / (1024.0 * 1024.0), 2)
 
         # Reuse an existing CUDA sm_87 llama-bench in /nix/store before falling back to nix-build.
+        # Resolved to its store path, so a profile switch can't swap the binary after detection.
         locate_or_build = (
             "set -euo pipefail; "
             "for b in $(command -v llama-bench 2>/dev/null || true) /nix/store/*-llama-cpp-*/bin/llama-bench; do "
-            '  if [ -x "$b" ] && "$b" --list-devices 2>&1 | grep -q CUDA0; then echo "$b"; exit 0; fi; '
+            '  if [ -x "$b" ] && "$b" --list-devices 2>&1 | grep -q CUDA0; then realpath "$b"; exit 0; fi; '
             "done; "
             f"out=$(systemd-run --user --wait --pipe --collect nix-build --no-out-link -E '{ORIN_NIX_EXPR}'); "
             'echo "$out/bin/llama-bench"'
@@ -551,7 +552,7 @@ def bench_orin_all(
                 "bash",
                 "-c",
                 shlex.quote(
-                    f"nix-store -qR $(realpath {shlex.quote(llama_bench_bin)}) "
+                    f"nix-store -qR {shlex.quote(llama_bench_bin)} "
                     "| grep -oE 'cuda_cudart-[0-9]+[.][0-9]+' | head -n 1 | cut -d- -f2"
                 ),
             ],

@@ -24,7 +24,7 @@ let
 
     # Edge & Local GGUF Pareto Frontier Explorer
 
-    Interactive explorer for calibrated `llama.cpp` `imatrix` GGUF quantizations, exact FP16 logit KL-divergence, and hardware power/throughput telemetry across 8 GiB NVIDIA Jetson Orin Nano (`sm_87` CUDA 13) and x86_64 AVX2.
+    Interactive explorer for calibrated `llama.cpp` `imatrix` GGUF quantizations, exact FP16 logit KL-divergence, and hardware power/throughput telemetry across 8 GiB NVIDIA Jetson Orin Nano (`sm_87` CUDA) and x86_64 AVX2.
 
     - **Dataset**: [`kleinbem/edge-llm-benchmarks`](https://huggingface.co/datasets/kleinbem/edge-llm-benchmarks)
     - **Source & Reproducible Nix Flake**: [`github.com/kleinbem/hf-bench`](https://github.com/kleinbem/hf-bench)
